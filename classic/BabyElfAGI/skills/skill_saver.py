@@ -14,8 +14,8 @@ class SkillSaver(Skill):
         if not self.valid:
             return
 
-        task_prompt = f"Extract the code and only the code from the dependent task output here: {dependent_task_outputs}  \n###\nCODE:"
-      
+        # Extract the code from the dependent task output
+        task_prompt = f"Please extract the code from the following text and return it:\n\n{dependent_task_outputs}\n\n###\nCODE:"
         messages = [
             {"role": "user", "content": task_prompt}
         ]
@@ -28,31 +28,37 @@ class SkillSaver(Skill):
             frequency_penalty=0,
             presence_penalty=0
         ) 
-    
-        code =  response.choices[0].message['content'].strip()
-        task_prompt = f"Come up with a file name (eg. 'get_weather.py') for the following skill:{code}\n###\nFILE_NAME:"
-      
-        messages = [
-            {"role": "user", "content": task_prompt}
-        ]
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            temperature=0.4,
-            max_tokens=3000,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0
-        ) 
-    
-        file_name =  response.choices[0].message['content'].strip()
-        file_path = os.path.join('skills',file_name)
+        code = response.choices[0].message['content'].strip()
 
+        # Generate a file name for the code
+        task_prompt = f"Please generate a file name for the following Python code:\n\n{code}\n\n###\nFILE_NAME:"
+        messages = [
+            {"role": "user", "content": task_prompt}
+        ]
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.4,
+            max_tokens=3000,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
+        ) 
+        file_name = response.choices[0].message['content'].strip()
+
+        # Ensure the file name has a .py extension
+        if not file_name.endswith('.py'):
+            file_name += '.py'
+
+        # Construct the file path
+        file_path = os.path.join('skills', file_name)
+
+        # Save the code to a file
         try:
+            if not os.path.exists('skills'):
+                os.makedirs('skills')
             with open(file_path, 'w') as file:
                 file.write(code)
                 print(f"Code saved successfully: {file_name}")
-        except:
-            print("Error saving code.")
-
-        return None
+        except Exception as e:
+            print(f"Error saving code: {str
