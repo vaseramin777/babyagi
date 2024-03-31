@@ -1,9 +1,12 @@
-import sys
+import io
 
 def user_input_await(prompt: str) -> str:
-    print("\033[94m\033[1m" + "\n> COPY FOLLOWING TEXT TO CHATBOT\n" + "\033[0m\033[0m")
-    print(prompt)
-    print("\033[91m\033[1m" + "\n AFTER PASTING, PRESS: (ENTER), (CTRL+Z), (ENTER) TO FINISH\n" + "\033[0m\033[0m")
-    print("\033[96m\033[1m" + "\n> PASTE YOUR RESPONSE:\n" + "\033[0m\033[0m")
-    input_text = sys.stdin.read()
-    return input_text.strip()
+    print("\n** COPY FOLLOWING TEXT TO CHATBOT **")
+    print(f"\n> {prompt}")
+    print("\n** AFTER PASTING, PRESS: (ENTER), (CTRL+Z), (ENTER) TO FINISH **")
+    print("\n**> PASTE YOUR RESPONSE: **\n")
+
+    with io.StringIO() as input_text:
+        input_text.write(input(""))
+        input_text.seek(0)
+        return input_text.read().strip()
