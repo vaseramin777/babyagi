@@ -1,9 +1,14 @@
 class Skill:
-    name = 'base skill'
-    description = 'This is the base skill.'
-    api_keys_required = []
+    """
+    A base class for skills that require API keys to execute.
+    """
 
-    def __init__(self, api_keys):
+    def __init__(self, api_keys: dict):
+        """
+        Initialize the skill with the given API keys.
+
+        :param api_keys: A dictionary mapping API key names to their values.
+        """
         self.api_keys = api_keys
         missing_keys = self.check_required_keys(api_keys)
         if missing_keys:
@@ -11,6 +16,26 @@ class Skill:
             self.valid = False
         else:
             self.valid = True
+            self.setup(api_keys)
+
+    def check_required_keys(self, api_keys: dict) -> set:
+        """
+        Check if all required API keys are present in the given dictionary.
+
+        :param api_keys: A dictionary mapping API key names to their values.
+        :return: A set of missing API key names.
+        """
+        missing_keys = set(self.api_keys_required) - set(api_keys.keys())
+        return missing_keys
+
+    def setup(self, api_keys: dict):
+        """
+        Set up the skill using the given API keys.
+
+        This method is called only if all required API keys are present.
+
+        :param api_keys: A dictionary mapping API key names to their values.
+        """
         for key in self.api_keys_required:
             if isinstance(key, list):
                 for subkey in key:
@@ -19,15 +44,4 @@ class Skill:
             elif key in api_keys:
                 setattr(self, f"{key}_api_key", api_keys.get(key))
 
-    def check_required_keys(self, api_keys):
-        missing_keys = []
-        for key in self.api_keys_required:
-            if isinstance(key, list):  # If the key is actually a list of alternatives
-                if not any(k in api_keys for k in key):  # If none of the alternatives are present
-                    missing_keys.append(key)  # Add the list of alternatives to the missing keys
-            elif key not in api_keys:  # If the key is a single key and it's not present
-                missing_keys.append(key)  # Add the key to the missing keys
-        return missing_keys
-
-    def execute(self, params, dependent_task_outputs, objective):
-        raise NotImplementedError('Execute method must be implemented in subclass.')
+    def execute(self, params, dependent_
