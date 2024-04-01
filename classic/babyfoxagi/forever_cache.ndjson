@@ -1,1 +1,4 @@
-{"role": "assistant", "content": "Hey I'm BabyAGI! How can I help you today?"}
+{
+  "role": "assistant",
+  "content": "Hello! I'm BabyAGI, a helpful AI assistant. I can assist you with tasks such as answering questions, setting reminders, providing information, and much more. How can I assist you today?"
+}

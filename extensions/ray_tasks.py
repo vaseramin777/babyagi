@@ -1,8 +1,7 @@
 import sys
-import logging
 import ray
 from collections import deque
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -13,57 +12,29 @@ try:
 except:
     ray.init(namespace="babyagi", logging_level=logging.FATAL, ignore_reinit_error=True)
 
-@ray.remote
+@ray.remote(name="CooperativeTaskListStorageActor")
 class CooperativeTaskListStorageActor:
     def __init__(self):
-        self.tasks = deque([])
-        self.task_id_counter = 0
+        self.tasks: deque[Dict[str, Any]] = deque([])
+        self.task_id_counter: int = 0
 
-    def append(self, task: Dict):
+    def append(self, task: Dict[str, Any]) -> None:
         self.tasks.append(task)
+        del task  # remove the object from the object store after it's no longer needed
 
-    def replace(self, tasks: List[Dict]):
+    def replace(self, tasks: List[Dict[str, Any]]) -> None:
         self.tasks = deque(tasks)
 
-    def popleft(self):
+    def popleft(self) -> Dict[str, Any]:
         return self.tasks.popleft()
 
-    def is_empty(self):
-        return False if self.tasks else True
+    def is_empty(self) -> bool:
+        return not bool(self.tasks)
 
-    def next_task_id(self):
+    def next_task_id(self) -> int:
         self.task_id_counter += 1
         return self.task_id_counter
 
-    def get_task_names(self):
+    def get_task_names(self) -> List[str]:
         return [t["task_name"] for t in self.tasks]
 
-class CooperativeTaskListStorage:
-    def __init__(self, name: str):
-        self.name = name
-
-        try:
-            self.actor = ray.get_actor(name=self.name, namespace="babyagi")
-        except ValueError:
-            self.actor = CooperativeTaskListStorageActor.options(name=self.name, namespace="babyagi", lifetime="detached").remote()
-
-        objectives = CooperativeObjectivesListStorage()
-        objectives.append(self.name)
-
-    def append(self, task: Dict):
-        self.actor.append.remote(task)
-
-    def replace(self, tasks: List[Dict]):
-        self.actor.replace.remote(tasks)
-
-    def popleft(self):
-        return ray.get(self.actor.popleft.remote())
-
-    def is_empty(self):
-        return ray.get(self.actor.is_empty.remote())
-
-    def next_task_id(self):
-        return ray.get(self.actor.next_task_id.remote())
-
-    def get_task_names(self):
-        return ray.get(self.actor.get_task_names.remote())

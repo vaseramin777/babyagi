@@ -1,1 +1,9 @@
-*.py text eol=lf
+def add_numbers(x: float, y: float) -> float:
+    """
+    Adds two numbers and returns the result.
+
+    :param x: The first number to add.
+    :param y: The second number to add.
+    :return: The sum of the two numbers.
+    """
+    return x + y

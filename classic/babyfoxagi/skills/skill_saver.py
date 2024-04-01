@@ -15,23 +15,7 @@ class SkillSaver(Skill):
             return
 
         task_prompt = f"Extract the code and only the code from the dependent task output here: {dependent_task_outputs}  \n###\nCODE:"
-      
-        messages = [
-            {"role": "user", "content": task_prompt}
-        ]
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo-16k",
-            messages=messages,
-            temperature=0.4,
-            max_tokens=3000,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0
-        ) 
-    
-        code =  response.choices[0].message['content'].strip()
-        task_prompt = f"Come up with a file name (eg. 'get_weather.py') for the following skill:{code}\n###\nFILE_NAME:"
-      
+
         messages = [
             {"role": "user", "content": task_prompt}
         ]
@@ -44,15 +28,3 @@ class SkillSaver(Skill):
             frequency_penalty=0,
             presence_penalty=0
         ) 
-    
-        file_name =  response.choices[0].message['content'].strip()
-        file_path = os.path.join('skills',file_name)
-
-        try:
-            with open(file_path, 'w') as file:
-                file.write(code)
-                print(f"Code saved successfully: {file_name}")
-        except:
-            print("Error saving code.")
-
-        return None

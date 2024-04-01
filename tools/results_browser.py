@@ -9,25 +9,16 @@ import textwrap
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-assert OPENAI_API_KEY, "OPENAI_API_KEY environment variable is missing from .env"
+def get_env_variable(var_name):
+    value = os.getenv(var_name)
+    if not value:
+        raise Exception(f"{var_name} environment variable is missing from .env")
+    return value
 
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
-assert PINECONE_API_KEY, "PINECONE_API_KEY environment variable is missing from .env"
-
-PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east1-gcp")
-assert PINECONE_ENVIRONMENT, "PINECONE_ENVIRONMENT environment variable is missing from .env"
-
-# Table config
-PINECONE_TABLE_NAME = os.getenv("TABLE_NAME", "")
-assert PINECONE_TABLE_NAME, "TABLE_NAME environment variable is missing from .env"
-
-# Function to query records from the Pinecone index
 def query_records(index, query, top_k=1000):
     results = index.query(query, top_k=top_k, include_metadata=True)
     return [{"name": f"{task.metadata['task']}", "result": f"{task.metadata['result']}"} for task in results.matches]
 
-# Get embedding for the text
 def get_ada_embedding(text):
     return openai.Embedding.create(input=[text], model="text-embedding-ada-002")["data"][0]["embedding"]
 
@@ -66,13 +57,13 @@ def draw_summary(stdscr, objective, tasks, start, num):
 
 def main(stdscr):
     # Configure OpenAI
-    openai.api_key = OPENAI_API_KEY
+    openai.api_key = get_env_variable("OPENAI_API_KEY")
 
     # Initialize Pinecone
-    pinecone.init(api_key=PINECONE_API_KEY)
+    pinecone.init(api_key=get_env_variable("PINECONE_API_KEY"))
 
     # Connect to the objective index
-    index = pinecone.Index(PINECONE_TABLE_NAME)
+    index = pinecone.Index(get_env_variable("PINECONE_TABLE_NAME"))
 
     curses.curs_set(0)
     stdscr.timeout(1000)
@@ -87,13 +78,16 @@ def main(stdscr):
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Query Pinecone index using a string.")
     parser.add_argument('objective', nargs='*', metavar='<objective>', help='''
-    main objective description. Doesn\'t need to be quoted.
+    main objective description. Doesn't need to be quoted.
     if not specified, get objective from environment.
-    ''', default=[os.getenv("OBJECTIVE", "")])
+    ''', default=["OBJECTIVE"])
     args = parser.parse_args()
 
+    objective = ' '.join(args.objective[1:]).strip().replace("\n", " ")
+    if not objective:
+        objective = get_env_variable("OBJECTIVE")
+
     # Query records from the index
-    objective = ' '.join(args.objective).strip().replace("\n", " ")
     retrieved_tasks = query_records(index, get_ada_embedding(objective))
 
     while True:

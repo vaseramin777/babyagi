@@ -1,110 +1,81 @@
-from skills.skill import Skill
 import openai
 import os
 import requests
 from urllib.parse import quote  # Python built-in URL encoding function
+from skills.skill import Skill
 
-#This Airtable Skill is tuned to work with our Airtable set up, where we are seaeching a specific column in a specific table, in a specific base. ll three variables need to be set below (Lines 55-59)
 class AirtableSearch(Skill):
     name = 'airtable_search'
     description = "A skill that retrieves data from our Airtable notes using a search. Useful for remembering who we talked to about a certain topic."
-    api_keys_required = ['code_reader','skill_saver','documentation_search','text_completion']
+    api_keys_required = ['code_reader', 'skill_saver', 'documentation_search', 'text_completion', 'airtable']
 
     def __init__(self, api_keys, main_loop_function):
         super().__init__(api_keys, main_loop_function)
+        self.airtable_api_key = self.api_keys['airtable']
+        self.base_id = '<base_id>'
+        self.table_name = '<table_name>'
+        self.filter_field = '<filter_field>'
 
     def execute(self, params, dependent_task_outputs, objective):
         if not self.valid:
             return
 
-        # Initialize a list to keep track of queries tried
         tried_queries = []
+        dependent_task = f"Use the dependent task output below as reference to help craft the correct search query for the provided task above. Dependent task output: {dependent_task_outputs}." if dependent_task_outputs else "."
 
-        # Modify the query based on the dependent task output
-        if dependent_task_outputs != "":
-            dependent_task = f"Use the dependent task output below as reference to help craft the correct search query for the provided task above. Dependent task output:{dependent_task_outputs}."
-        else:
-            dependent_task = "."
-        
-        # Initialize output
         output = ''
-        
-        while not output: 
-            # If there are tried queries, add them to the prompt
+        while not output:
             tried_queries_prompt = f" Do not include search queries we have tried, and instead try synonyms or misspellings. Search queries we have tried: {', '.join(tried_queries)}." if tried_queries else ""
-            print(tried_queries_prompt)
             query = self.text_completion_tool(f"You are an AI assistant tasked with generating a one word search query based on the following task: {params}. Provide only the search query as a response. {tried_queries_prompt} Take into account output from the previous task:{dependent_task}.\nExample Task: Retrieve data from Airtable notes using the skill 'airtable_search' to find people we have talked to about TED AI.\nExample Query:TED AI\nExample Task:Conduct a search in our Airtable notes to identify investors who have expressed interest in climate.\nExample Query:climate\nTask:{params}\nQuery:")
 
-            # Add the query to the list of tried queries
+            if not query or len(query.strip()) == 0:
+                continue
+
+            if query in tried_queries:
+                continue
+
             tried_queries.append(query)
+            print(f"\033[90m\033[3mSearch query: {query}\033[0m")
 
-            print("\033[90m\033[3m"+"Search query: " +str(query)+"\033[0m")
-
-            # Retrieve the Airtable API key
-            airtable_api_key = self.api_keys['airtable']
-          
-            # Set the headers for the API request
             headers = {
-                "Authorization": f"Bearer {airtable_api_key}",
+                "Authorization": f"Bearer {self.airtable_api_key}",
                 "Content-Type": "application/json"
             }
-          
 
-            # Set base id
-            base_id = '<base_id>'
-            table_name = '<table_name'
-
-
-            # The field to filter on and the value to search for
-            filter_field = '<filter_field>' 
             filter_value = query
+            if ' ' in filter_value:
+                filter_value = f'"{filter_value}"'
 
-            # URL encode the filter_field
-            encoded_filter_field = quote(filter_field)
-
-            # If filter_field contains a space, wrap it in curly brackets
-            formula_field = f'{{{filter_field}}}' if ' ' in filter_field else f'{filter_field}'
-
-            # Construct the Airtable formula and URL encode it
-            formula = f'"{filter_value}",{formula_field}'
+            encoded_filter_field = quote(self.filter_field)
+            formula_field = f'{{{self.filter_field}}}' if ' ' in self.filter_field else f'{self.filter_field}'
+            formula = f"{filter_value},{formula_field}"
             encoded_formula = quote(formula)
 
-            # Construct the Airtable API URL
-            url = f"https://api.airtable.com/v0/{base_id}/{table_name}?fields%5B%5D={encoded_filter_field}&filterByFormula=FIND({encoded_formula})"
-            print(url)
-        
+            url = f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}?fields%5B%5D={encoded_filter_field}&filterByFormula=FIND({encoded_formula})"
+            print(f"\033[90m\033[3mURL: {url}\033[0m")
 
-            # Make the API request to retrieve the data from Airtable
-            response = requests.get(url, headers=headers)
-
-            # Check if the API request was successful
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Iterate through the records and process each one
-                for record in data['records']:
-                    # Combine objective, task, and record into a single string
-                    input_str = f"Your objective:{objective}\nYour task:{params}\nThe Airtable record:{record['fields']}"
-                    #print(record['fields'])
-                  
-                    if output == "":
-                      instructions = ""
-                    else:
-                      instructions = f"Update the existing summary by adding information from this new record. ###Current summary:{output}."
-                    
-                    # Send the combined string to the OpenAI ChatCompletion API
-                    response = self.text_completion_tool(f"You are an AI assistant that will review content from an Airtable record provided by the user, and extract only relevant information to the task at hand with context on why that information is relevant, taking into account the objective. If there is no relevant info, simply respond with '###'. Note that the Airtable note may use shorthand, and do your best to understand it first.{instructions} #####AIRTABLE DATA: {input_str}.") 
-                    print("\033[90m\033[3m" +str(response)+"\033[0m")
-                    output += response + "\n####"
-            else:
-                print(f"Failed to retrieve data from Airtable. Status code: {response.status_code}")
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                print(f"Failed to retrieve data from Airtable. Error: {e}")
                 return None
 
-        # Return the combined output
-      
-        output = "Tried Queries: "+str(tried_queries)+"###Result:"+output
+            data = response.json()
+            if 'records' not in data or len(data['records']) == 0:
+                print("No records found.")
+                continue
+
+            output = self._process_record(data['records'][0], params, objective)
+
+        output = f"Tried Queries: {str(tried_queries)}###Result:{output}"
         return output
 
+    def _process_record(self, record, params, objective):
+        input_str = f"Your objective:{objective}\nYour task:{params}\nThe Airtable record:{record['fields']}"
+        instructions = f"Update the existing summary by adding information from this new record. ###Current summary:{output}." if output else ""
+        response = self.text_completion_tool(f"You are an AI assistant that will review content from an Airtable record provided by the user, and extract only relevant information to the task at hand with context on why that information is relevant, taking into account the objective. If there is no relevant info, simply respond with '###'. Note that the Airtable note may use shorthand, and do your best to understand it first.{instructions} #####AIRTABLE DATA: {input_str}.")
+        return response
 
     def text_completion_tool(self, prompt: str):
         messages = [
@@ -119,5 +90,4 @@ class AirtableSearch(Skill):
             frequency_penalty=0,
             presence_penalty=0
         )
-    
         return response.choices[0].message['content'].strip()
